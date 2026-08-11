@@ -16,10 +16,12 @@ edition = "2024"
 [features]
 default = ["isahc-client"]
 isahc-client = ["isahc", "futures-lite/futures-io"]
+reqwest-client = ["reqwest"]
 
 [dependencies]
 isahc = { version = "2.0", optional = true }
 futures-lite = { version = "2.6", optional = true }
+reqwest = { version = "0.13", optional = true }
 http = "1.5"
 serde = "1.0"
 serde_json = "1.0"

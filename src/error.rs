@@ -93,6 +93,13 @@ impl From<InvalidUri> for WebPushError {
     }
 }
 
+#[cfg(feature = "reqwest-client")]
+impl From<reqwest::Error> for WebPushError {
+    fn from(_: reqwest::Error) -> Self {
+        Self::Unspecified
+    }
+}
+
 #[cfg(feature = "isahc-client")]
 impl From<isahc::Error> for WebPushError {
     fn from(_: isahc::Error) -> Self {
