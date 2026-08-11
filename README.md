@@ -108,8 +108,7 @@ Currently, the crate implements
 [RFC8188](https://datatracker.ietf.org/doc/html/rfc8188) content encryption for notification payloads. This is done by
 delegating encryption to mozilla's [ece crate](https://crates.io/crates/ece). Our security is thus tied
 to [theirs](https://github.com/mozilla/rust-ece/issues/18). The default client is built
-on [isahc](https://crates.io/crates/isahc), but can be swapped out with a hyper based client using the
-`hyper-client` feature. Custom clients can be made using the `request_builder` module.
+on [isahc](https://crates.io/crates/isahc). Custom clients can be made using the `request_builder` module.
 
 Library tested with Google's and Mozilla's push notification services. Also verified to work on Edge.
 

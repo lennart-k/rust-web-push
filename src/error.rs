@@ -93,13 +93,6 @@ impl From<InvalidUri> for WebPushError {
     }
 }
 
-#[cfg(feature = "hyper-client")]
-impl From<hyper::Error> for WebPushError {
-    fn from(_: hyper::Error) -> Self {
-        Self::Unspecified
-    }
-}
-
 #[cfg(feature = "isahc-client")]
 impl From<isahc::Error> for WebPushError {
     fn from(_: isahc::Error) -> Self {
