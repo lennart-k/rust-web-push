@@ -54,7 +54,7 @@ pub use crate::{
     error::WebPushError,
     http_ece::ContentEncoding,
     message::{SubscriptionInfo, SubscriptionKeys, Urgency, WebPushMessage, WebPushMessageBuilder, WebPushPayload},
-    vapid::{VapidSignature, VapidSignatureBuilder, builder::PartialVapidSignatureBuilder},
+    vapid::*,
 };
 
 mod clients;
