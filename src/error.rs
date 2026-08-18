@@ -70,6 +70,7 @@ pub enum WebPushError {
     InvalidClaims,
     /// Response from push endpoint was too large
     ResponseTooLarge,
+    JWT(jsonwebtoken::errors::Error),
     Other(ErrorInfo),
 }
 
@@ -78,6 +79,12 @@ impl Error for WebPushError {}
 impl From<JsonError> for WebPushError {
     fn from(_: JsonError) -> WebPushError {
         WebPushError::InvalidResponse
+    }
+}
+
+impl From<jsonwebtoken::errors::Error> for WebPushError {
+    fn from(err: jsonwebtoken::errors::Error) -> WebPushError {
+        WebPushError::JWT(err)
     }
 }
 
@@ -134,6 +141,7 @@ impl WebPushError {
             WebPushError::Io(_) => "io_error",
             WebPushError::Other(_) => "other",
             WebPushError::InvalidClaims => "invalidClaims",
+            WebPushError::JWT(_) => "jsonwebtoken error",
             WebPushError::ResponseTooLarge => "response_too_large",
         }
     }
@@ -163,6 +171,7 @@ impl fmt::Display for WebPushError {
             WebPushError::InvalidCryptoKeys => write!(f, "request has invalid cryptographic keys"),
             WebPushError::Other(info) => write!(f, "other: {}", info),
             WebPushError::InvalidClaims => write!(f, "at least one jwt claim was invalid"),
+            WebPushError::JWT(info) => write!(f, "jsonwebtoken error: {}", info),
             WebPushError::ResponseTooLarge => write!(f, "response from push endpoint was too large"),
         }
     }

@@ -8,7 +8,7 @@ use serde_json::Value;
 use crate::{
     error::WebPushError,
     message::SubscriptionInfo,
-    vapid::{signer::Claims, VapidKey, VapidSignature, VapidSigner},
+    vapid::{VapidKey, VapidSignature, VapidSigner, signer::Claims},
 };
 
 /// A VAPID signature builder for generating an optional signature to the
@@ -291,11 +291,20 @@ impl PartialVapidSignatureBuilder {
 
 #[cfg(test)]
 mod tests {
-    use ct_codecs::{Base64UrlSafeNoPadding, Encoder};
+    use ct_codecs::{Base64UrlSafeNoPadding, Decoder, Encoder};
+    use http::Uri;
+    use jsonwebtoken::{Algorithm, DecodingKey, EncodingKey, Validation, dangerous::insecure_decode, decode};
+    use jwt_simple::{
+        algorithms::{ES256KeyPair, PS256KeyPair},
+        reexports::coarsetime::UnixTimeStamp,
+    };
 
-    use crate::{message::SubscriptionInfo, vapid::VapidSignatureBuilder};
+    use crate::{
+        message::SubscriptionInfo,
+        vapid::{VapidSignatureBuilder, key, signer::Claims},
+    };
 
-    static PRIVATE_PEM: &[u8] = include_bytes!("../../resources/vapid_test_key.pem");
+    static PRIVATE_PEM: &str = include_str!("../../resources/vapid_test_key.pem");
     static PRIVATE_DER: &[u8] = include_bytes!("../../resources/vapid_test_key.der");
     static PRIVATE_BASE64: &str = "IQ9Ur0ykXoHS9gzfYX0aBjy9lvdrjx_PFUXmie9YRcY";
 
@@ -314,7 +323,7 @@ mod tests {
     #[test]
     fn test_builder_from_pem() {
         let subscription_info = example_subscription_info();
-        let builder = VapidSignatureBuilder::from_pem(PRIVATE_PEM, &subscription_info).unwrap();
+        let builder = VapidSignatureBuilder::from_pem(PRIVATE_PEM.as_bytes(), &subscription_info).unwrap();
         let signature = builder.build().unwrap();
 
         assert_eq!(
@@ -351,5 +360,38 @@ mod tests {
         );
 
         assert!(!signature.auth_t.is_empty());
+    }
+
+    #[test]
+    fn test_regresion_auth_t() {
+        let subscription_info = example_subscription_info();
+        // create example signature
+        let mut builder = VapidSignatureBuilder::from_pem(PRIVATE_PEM.as_bytes(), &subscription_info).unwrap();
+        builder.claims.issued_at = Some(UnixTimeStamp::from_secs(1787080601));
+        builder.claims.invalid_before = Some(UnixTimeStamp::from_secs(1787080601));
+        builder.claims.expires_at = Some(UnixTimeStamp::from_secs(1787080601 + 43200));
+        let signature = builder.build().unwrap();
+
+        assert_eq!(
+            "BMo1HqKF6skMZYykrte9duqYwBD08mDQKTunRkJdD3sTJ9E-yyN6sJlPWTpKNhp-y2KeS6oANHF-q3w37bClb7U",
+            Base64UrlSafeNoPadding::encode_to_string(&signature.auth_k).unwrap(),
+            "Verify that key representation stays constant"
+        );
+
+        let keypair = ES256KeyPair::from_bytes(&sec1_decode::parse_pem(PRIVATE_PEM.as_bytes()).unwrap().key).unwrap();
+        let public_key = DecodingKey::from_ec_der(&keypair.public_key().to_bytes());
+
+        let mut validator = Validation::new(Algorithm::ES256);
+        let endpoint: Uri = subscription_info.endpoint.parse().unwrap();
+        let audience = format!("{}://{}", endpoint.scheme_str().unwrap(), endpoint.host().unwrap());
+        validator.set_audience(&[audience]);
+        let token = decode::<Claims>(signature.auth_t, &public_key, &validator).unwrap();
+        let header = serde_json::to_string(&token.header).unwrap();
+        assert_eq!(&header, r#"{"typ":"JWT","alg":"ES256"}"#);
+        let claims = serde_json::to_string(&token.claims).unwrap();
+        assert_eq!(
+            &claims,
+            r#"{"iat":1787080601,"exp":1787123801,"nbf":1787080601,"sub":"mailto:example@example.com","aud":"https://updates.push.services.mozilla.com"}"#
+        );
     }
 }
