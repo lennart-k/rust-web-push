@@ -293,9 +293,8 @@ impl PartialVapidSignatureBuilder {
 mod tests {
     use ct_codecs::{Base64UrlSafeNoPadding, Decoder, Encoder};
     use http::Uri;
-    use jsonwebtoken::{Algorithm, DecodingKey, EncodingKey, Validation, dangerous::insecure_decode, decode};
     use jwt_simple::{
-        algorithms::{ES256KeyPair, PS256KeyPair},
+        algorithms::{ECDSAP256PublicKeyLike, ES256KeyPair, PS256KeyPair},
         reexports::coarsetime::UnixTimeStamp,
     };
 
@@ -379,16 +378,9 @@ mod tests {
         );
 
         let keypair = ES256KeyPair::from_bytes(&sec1_decode::parse_pem(PRIVATE_PEM.as_bytes()).unwrap().key).unwrap();
-        let public_key = DecodingKey::from_ec_der(&keypair.public_key().to_bytes());
 
-        let mut validator = Validation::new(Algorithm::ES256);
-        let endpoint: Uri = subscription_info.endpoint.parse().unwrap();
-        let audience = format!("{}://{}", endpoint.scheme_str().unwrap(), endpoint.host().unwrap());
-        validator.set_audience(&[audience]);
-        let token = decode::<Claims>(signature.auth_t, &public_key, &validator).unwrap();
-        let header = serde_json::to_string(&token.header).unwrap();
-        assert_eq!(&header, r#"{"typ":"JWT","alg":"ES256"}"#);
-        let claims = serde_json::to_string(&token.claims).unwrap();
+        let decoded_claims: Claims = keypair.public_key().verify_token(&signature.auth_t, None).unwrap();
+        let claims = serde_json::to_string(&decoded_claims).unwrap();
         assert_eq!(
             &claims,
             r#"{"iat":1787080601,"exp":1787123801,"nbf":1787080601,"sub":"mailto:example@example.com","aud":"https://updates.push.services.mozilla.com"}"#
