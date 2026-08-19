@@ -173,7 +173,7 @@ impl<'a> VapidSignatureBuilder<'a> {
         Ok(signature)
     }
 
-    fn from_ec(key: VapidKey, subscription_info: &'a SubscriptionInfo) -> VapidSignatureBuilder<'a> {
+    pub fn from_ec(key: VapidKey, subscription_info: &'a SubscriptionInfo) -> VapidSignatureBuilder<'a> {
         VapidSignatureBuilder {
             claims: jwt_simple::prelude::Claims::with_custom_claims(BTreeMap::new(), Duration::from_hours(12)),
             key,

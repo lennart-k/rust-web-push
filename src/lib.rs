@@ -48,6 +48,8 @@ extern crate serde_derive;
 
 #[cfg(feature = "isahc-client")]
 pub use crate::clients::isahc_client::IsahcWebPushClient;
+#[cfg(feature = "reqwest-client")]
+pub use crate::clients::reqwest_client::ReqwestWebPushClient;
 pub use crate::{
     clients::{WebPushClient, request_builder},
     error::WebPushError,
