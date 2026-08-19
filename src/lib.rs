@@ -8,7 +8,6 @@
 //!
 //! ```no_run
 //! # use web_push::*;
-//! # use std::fs::File;
 //! # #[tokio::main]
 //! # async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>> {
 //! let endpoint = "https://updates.push.services.mozilla.com/wpush/v1/...";
@@ -23,8 +22,8 @@
 //! );
 //!
 //! // Read signing material for payload.
-//! let file = File::open("private.pem").unwrap();
-//! let mut sig_builder = VapidSignatureBuilder::from_pem(file, &subscription_info)?.build()?;
+//! let pem = std::fs::read_to_string("private.pem").unwrap();
+//! let mut sig_builder = VapidSignatureBuilder::from_pem(&pem, &subscription_info)?.build()?;
 //!
 //! // Now add payload and encrypt.
 //! let mut builder = WebPushMessageBuilder::new(&subscription_info);

@@ -1,9 +1,7 @@
-use std::{collections::BTreeMap, io::Read};
-
-use ct_codecs::Base64UrlSafeNoPadding;
 use http::uri::Uri;
 use jwt_simple::prelude::*;
 use serde_json::Value;
+use std::collections::BTreeMap;
 
 use crate::{
     error::WebPushError,
@@ -51,7 +49,6 @@ use crate::{
 /// ```no_run
 /// # extern crate web_push;
 /// # use web_push::*;
-/// # use std::fs::File;
 /// # fn main () {
 /// //You would get this as a `pushSubscription` object from the client. They need your public key to get that object.
 /// let subscription_info = SubscriptionInfo {
@@ -62,9 +59,9 @@ use crate::{
 ///     endpoint: String::from("https://mozilla.rules/something"),
 /// };
 ///
-/// let file = File::open("private.pem").unwrap();
+/// let pem = std::fs::read_to_string("private.pem").unwrap();
 ///
-/// let mut sig_builder = VapidSignatureBuilder::from_pem(file, &subscription_info).unwrap();
+/// let mut sig_builder = VapidSignatureBuilder::from_pem(&pem, &subscription_info).unwrap();
 ///
 /// //These fields are optional, and likely unneeded for most uses.
 /// sig_builder.add_claim("sub", "mailto:test@example.com");
@@ -87,13 +84,11 @@ impl<'a> VapidSignatureBuilder<'a> {
     ///
     /// The input can be either a pkcs8 formatted PEM, denoted by a -----BEGIN PRIVATE KEY------
     /// header, or a SEC1 formatted PEM, denoted by a -----BEGIN EC PRIVATE KEY------ header.
-    pub fn from_pem<R: Read>(
-        pk_pem: R,
+    pub fn from_pem(
+        pem: &str,
         subscription_info: &'a SubscriptionInfo,
     ) -> Result<VapidSignatureBuilder<'a>, WebPushError> {
-        let pr_key = Self::read_pem(pk_pem)?;
-
-        Ok(Self::from_ec(pr_key, subscription_info))
+        Ok(Self::from_ec(VapidKey::from_pem(pem)?, subscription_info))
     }
 
     /// Creates a new builder from a PEM formatted private key. This function doesn't take a subscription,
@@ -103,48 +98,25 @@ impl<'a> VapidSignatureBuilder<'a> {
     ///
     /// The input can be either a pkcs8 formatted PEM, denoted by a -----BEGIN PRIVATE KEY------
     /// header, or a SEC1 formatted PEM, denoted by a -----BEGIN EC PRIVATE KEY------ header.
-    pub fn from_pem_no_sub<R: Read>(pk_pem: R) -> Result<PartialVapidSignatureBuilder, WebPushError> {
-        let pr_key = Self::read_pem(pk_pem)?;
-
+    pub fn from_pem_no_sub(pem: &str) -> Result<PartialVapidSignatureBuilder, WebPushError> {
         Ok(PartialVapidSignatureBuilder {
-            key: VapidKey::new(pr_key),
+            key: VapidKey::from_pem(pem)?,
         })
     }
 
     /// Creates a new builder from a DER formatted private key.
-    pub fn from_der<R: Read>(
-        mut pk_der: R,
+    pub fn from_der(
+        der: &[u8],
         subscription_info: &'a SubscriptionInfo,
     ) -> Result<VapidSignatureBuilder<'a>, WebPushError> {
-        let mut der_key: Vec<u8> = Vec::new();
-        pk_der.read_to_end(&mut der_key)?;
-
-        Ok(Self::from_ec(
-            ES256KeyPair::from_bytes(
-                &sec1_decode::parse_der(&der_key)
-                    .map_err(|_| WebPushError::InvalidCryptoKeys)?
-                    .key,
-            )
-            .map_err(|_| WebPushError::InvalidCryptoKeys)?,
-            subscription_info,
-        ))
+        Ok(Self::from_ec(VapidKey::from_der(der)?, subscription_info))
     }
 
     /// Creates a new builder from a DER formatted private key. This function doesn't take a subscription,
     /// allowing the reuse of one builder for multiple messages by cloning the resulting builder.
-    pub fn from_der_no_sub<R: Read>(mut pk_der: R) -> Result<PartialVapidSignatureBuilder, WebPushError> {
-        let mut der_key: Vec<u8> = Vec::new();
-        pk_der.read_to_end(&mut der_key)?;
-
+    pub fn from_der_no_sub(der: &[u8]) -> Result<PartialVapidSignatureBuilder, WebPushError> {
         Ok(PartialVapidSignatureBuilder {
-            key: VapidKey::new(
-                ES256KeyPair::from_bytes(
-                    &sec1_decode::parse_der(&der_key)
-                        .map_err(|_| WebPushError::InvalidCryptoKeys)?
-                        .key,
-                )
-                .map_err(|_| WebPushError::InvalidCryptoKeys)?,
-            ),
+            key: VapidKey::from_der(der)?,
         })
     }
 
@@ -166,12 +138,7 @@ impl<'a> VapidSignatureBuilder<'a> {
         encoded: &str,
         subscription_info: &'a SubscriptionInfo,
     ) -> Result<VapidSignatureBuilder<'a>, WebPushError> {
-        let pr_key = ES256KeyPair::from_bytes(
-            &Base64UrlSafeNoPadding::decode_to_vec(encoded, None).map_err(|_| WebPushError::InvalidCryptoKeys)?,
-        )
-        .map_err(|_| WebPushError::InvalidCryptoKeys)?;
-
-        Ok(Self::from_ec(pr_key, subscription_info))
+        Ok(Self::from_ec(VapidKey::from_base64(encoded)?, subscription_info))
     }
 
     /// Creates a new builder from a raw base64-encoded private key. This function doesn't take a subscription,
@@ -180,13 +147,8 @@ impl<'a> VapidSignatureBuilder<'a> {
     /// Base64 encoding must use URL-safe alphabet without padding.
     ///
     pub fn from_base64_no_sub(encoded: &str) -> Result<PartialVapidSignatureBuilder, WebPushError> {
-        let pr_key = ES256KeyPair::from_bytes(
-            &Base64UrlSafeNoPadding::decode_to_vec(encoded, None).map_err(|_| WebPushError::InvalidCryptoKeys)?,
-        )
-        .map_err(|_| WebPushError::InvalidCryptoKeys)?;
-
         Ok(PartialVapidSignatureBuilder {
-            key: VapidKey::new(pr_key),
+            key: VapidKey::from_base64(encoded)?,
         })
     }
 
@@ -211,33 +173,11 @@ impl<'a> VapidSignatureBuilder<'a> {
         Ok(signature)
     }
 
-    fn from_ec(ec_key: ES256KeyPair, subscription_info: &'a SubscriptionInfo) -> VapidSignatureBuilder<'a> {
+    fn from_ec(key: VapidKey, subscription_info: &'a SubscriptionInfo) -> VapidSignatureBuilder<'a> {
         VapidSignatureBuilder {
             claims: jwt_simple::prelude::Claims::with_custom_claims(BTreeMap::new(), Duration::from_hours(12)),
-            key: VapidKey::new(ec_key),
+            key,
             subscription_info,
-        }
-    }
-
-    /// Reads the pem file as either format sec1 or pkcs8, then returns the decoded private key.
-    pub(crate) fn read_pem<R: Read>(mut input: R) -> Result<ES256KeyPair, WebPushError> {
-        let mut buffer = String::new();
-        input.read_to_string(&mut buffer)?;
-
-        //Parse many PEM in the assumption of extra unneeded sections.
-        let parsed = pem::parse_many(&buffer).map_err(|_| WebPushError::InvalidCryptoKeys)?;
-
-        let found_pkcs8 = parsed.iter().any(|pem| pem.tag() == "PRIVATE KEY");
-        let found_sec1 = parsed.iter().any(|pem| pem.tag() == "EC PRIVATE KEY");
-
-        //Handle each kind of PEM file differently, as EC keys can be in SEC1 or PKCS8 format.
-        if found_sec1 {
-            let key = sec1_decode::parse_pem(buffer.as_bytes()).map_err(|_| WebPushError::InvalidCryptoKeys)?;
-            Ok(ES256KeyPair::from_bytes(&key.key).map_err(|_| WebPushError::InvalidCryptoKeys)?)
-        } else if found_pkcs8 {
-            Ok(ES256KeyPair::from_pem(&buffer).map_err(|_| WebPushError::InvalidCryptoKeys)?)
-        } else {
-            Err(WebPushError::MissingCryptoKeys)
         }
     }
 }
@@ -249,7 +189,7 @@ impl<'a> VapidSignatureBuilder<'a> {
 /// ```no_run
 /// use web_push::{VapidSignatureBuilder, SubscriptionInfo};
 ///
-/// let builder = VapidSignatureBuilder::from_pem_no_sub("Some PEM".as_bytes()).unwrap();
+/// let builder = VapidSignatureBuilder::from_pem_no_sub("Some PEM").unwrap();
 ///
 /// //Clone builder for each use of the same private key
 /// {
@@ -291,16 +231,16 @@ impl PartialVapidSignatureBuilder {
 
 #[cfg(test)]
 mod tests {
-    use ct_codecs::{Base64UrlSafeNoPadding, Decoder, Encoder};
-    use http::Uri;
+    use ct_codecs::{Base64UrlSafeNoPadding, Encoder};
     use jwt_simple::{
-        algorithms::{ECDSAP256PublicKeyLike, ES256KeyPair, PS256KeyPair},
+        algorithms::{ECDSAP256PublicKeyLike, ES256KeyPair},
+        common::VerificationOptions,
         reexports::coarsetime::UnixTimeStamp,
     };
 
     use crate::{
         message::SubscriptionInfo,
-        vapid::{VapidSignatureBuilder, key, signer::Claims},
+        vapid::{VapidSignatureBuilder, signer::Claims},
     };
 
     static PRIVATE_PEM: &str = include_str!("../../resources/vapid_test_key.pem");
@@ -322,7 +262,7 @@ mod tests {
     #[test]
     fn test_builder_from_pem() {
         let subscription_info = example_subscription_info();
-        let builder = VapidSignatureBuilder::from_pem(PRIVATE_PEM.as_bytes(), &subscription_info).unwrap();
+        let builder = VapidSignatureBuilder::from_pem(PRIVATE_PEM, &subscription_info).unwrap();
         let signature = builder.build().unwrap();
 
         assert_eq!(
@@ -365,7 +305,7 @@ mod tests {
     fn test_regresion_auth_t() {
         let subscription_info = example_subscription_info();
         // create example signature
-        let mut builder = VapidSignatureBuilder::from_pem(PRIVATE_PEM.as_bytes(), &subscription_info).unwrap();
+        let mut builder = VapidSignatureBuilder::from_pem(PRIVATE_PEM, &subscription_info).unwrap();
         builder.claims.issued_at = Some(UnixTimeStamp::from_secs(1787080601));
         builder.claims.invalid_before = Some(UnixTimeStamp::from_secs(1787080601));
         builder.claims.expires_at = Some(UnixTimeStamp::from_secs(1787080601 + 43200));
@@ -379,7 +319,14 @@ mod tests {
 
         let keypair = ES256KeyPair::from_bytes(&sec1_decode::parse_pem(PRIVATE_PEM.as_bytes()).unwrap().key).unwrap();
 
-        let decoded_claims: Claims = keypair.public_key().verify_token(&signature.auth_t, None).unwrap();
+        let verifier_options: VerificationOptions = VerificationOptions {
+            artificial_time: Some(UnixTimeStamp::from_secs(1787080601)),
+            ..Default::default()
+        };
+        let decoded_claims: Claims = keypair
+            .public_key()
+            .verify_token(&signature.auth_t, Some(verifier_options))
+            .unwrap();
         let claims = serde_json::to_string(&decoded_claims).unwrap();
         assert_eq!(
             &claims,
