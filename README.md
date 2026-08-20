@@ -45,10 +45,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>
     let mut sig_builder = VapidSignatureBuilder::from_pem(file, &subscription_info)?.build()?;
 
     //Now add payload and encrypt.
-    let mut builder = WebPushMessageBuilder::new(&subscription_info);
     let content = "Encrypted payload to be sent in the notification".as_bytes();
-    builder.set_payload(ContentEncoding::Aes128Gcm, content);
-    builder.set_vapid_signature(sig_builder);
+    let mut builder = WebPushMessageBuilder::new(&subscription_info)
+      .payload(ContentEncoding::Aes128Gcm, content)
+      .vapid_signature(sig_builder);
 
     let client = IsahcWebPushClient::new()?;
 

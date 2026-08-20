@@ -117,11 +117,10 @@ mod tests {
 
         let info = serde_json::from_value(sub).unwrap();
 
-        let mut builder = WebPushMessageBuilder::new(&info);
-
-        builder.set_ttl(420);
-        builder.set_urgency(Urgency::VeryLow);
-        builder.set_topic("some-topic".into());
+        let builder = WebPushMessageBuilder::new(&info)
+            .ttl(420)
+            .urgency(Urgency::VeryLow)
+            .topic("some-topic".to_owned());
 
         let request = build_request::<isahc::Body>(builder.build().unwrap());
         let ttl = request.headers().get("TTL").unwrap().to_str().unwrap();
@@ -148,9 +147,7 @@ mod tests {
 
         let info = serde_json::from_value(sub).unwrap();
 
-        let mut builder = WebPushMessageBuilder::new(&info);
-
-        builder.set_payload(ContentEncoding::Aes128Gcm, "test".as_bytes());
+        let builder = WebPushMessageBuilder::new(&info).payload(ContentEncoding::Aes128Gcm, "test".as_bytes());
 
         let request = build_request::<isahc::Body>(builder.build().unwrap());
 
