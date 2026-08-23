@@ -61,14 +61,12 @@ use crate::{
 ///
 /// let pem = std::fs::read_to_string("private.pem").unwrap();
 ///
-/// let mut sig_builder = VapidSignatureBuilder::from_pem(&pem, &subscription_info).unwrap();
-///
+/// let signature = VapidSignatureBuilder::from_pem(&pem, &subscription_info).unwrap()
 /// //These fields are optional, and likely unneeded for most uses.
-/// sig_builder.add_claim("sub", "mailto:test@example.com");
-/// sig_builder.add_claim("foo", "bar");
-/// sig_builder.add_claim("omg", 123);
-///
-/// let signature = sig_builder.build().unwrap();
+///     .with_claim("sub", "mailto:test@example.com")
+///     .with_claim("foo", "bar")
+///     .with_claim("omg", 123)
+///     .build().unwrap();
 /// # }
 /// ```
 pub struct VapidSignatureBuilder<'a> {
@@ -158,11 +156,12 @@ impl<'a> VapidSignatureBuilder<'a> {
     ///
     /// The function accepts any value that can be converted into a type JSON
     /// supports.
-    pub fn add_claim<V>(&mut self, key: &'a str, val: V)
+    pub fn with_claim<V>(mut self, key: &'a str, val: V) -> Self
     where
         V: Into<Value>,
     {
         self.claims.custom.insert(key.to_string(), val.into());
+        self
     }
 
     /// Builds a signature to be used in [WebPushMessageBuilder](struct.WebPushMessageBuilder.html).

@@ -65,13 +65,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error + Send + Sync + 'static>
     if let Some(ref vapid_file) = vapid_private_key {
         let pem = std::fs::read_to_string(vapid_file).unwrap();
 
-        let mut sig_builder = VapidSignatureBuilder::from_pem(&pem, &subscription_info).unwrap();
-
-        sig_builder.add_claim("sub", "mailto:test@example.com");
-        sig_builder.add_claim("foo", "bar");
-        sig_builder.add_claim("omg", 123);
-
-        let signature = sig_builder.build().unwrap();
+        let signature = VapidSignatureBuilder::from_pem(&pem, &subscription_info)
+            .unwrap()
+            .with_claim("sub", "mailto:test@example.com")
+            .with_claim("foo", "bar")
+            .with_claim("omg", 123)
+            .build()
+            .unwrap();
 
         builder = builder.vapid_signature(signature);
     };
