@@ -57,6 +57,15 @@ impl VapidKey {
         ))
     }
 
+    /// Returns a pkcs8-formatted PEM
+    pub fn to_pem(&self) -> Result<String, WebPushError> {
+        Ok(self
+            .0
+            .to_pkcs8_pem(base64ct::LineEnding::LF)
+            .map_err(|_| WebPushError::InvalidCryptoKeys)?
+            .to_string())
+    }
+
     /// Reads the pem file as either format sec1 or pkcs8, then returns the decoded private key.
     pub fn from_pem(input: &str) -> Result<Self, WebPushError> {
         //Parse many PEM in the assumption of extra unneeded sections.
@@ -83,6 +92,21 @@ mod tests {
                 26, 126, 203, 98, 158, 75, 170, 0, 52, 113, 126, 171, 124, 55, 237, 176, 165, 111, 181
             ],
             key.public_key()
+        );
+    }
+
+    const PRIVATE_KEY_PKCS8_PEM: &str = "-----BEGIN PRIVATE KEY-----
+MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgRcaL57dKAzUY8jvQ
+s0BqNrc9qwW/TKOp+4C+y5Sdna2hRANCAASz4ofOB5Lwe3N3oKRtwaa+TuHl9qlL
+t/eFgmLbVNax7XKLJ0p6bzf/QGIsVSxBCqJ6i3W+hHm5M1eT/xtNewrG
+-----END PRIVATE KEY-----
+";
+
+    #[test]
+    fn test_key_pkcs8_roundtrip() {
+        assert_eq!(
+            PRIVATE_KEY_PKCS8_PEM,
+            VapidKey::from_pem(PRIVATE_KEY_PKCS8_PEM).unwrap().to_pem().unwrap()
         );
     }
 
