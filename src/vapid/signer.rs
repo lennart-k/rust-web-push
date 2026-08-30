@@ -1,8 +1,10 @@
-use std::collections::BTreeMap;
-
 use http::uri::Uri;
-use jwt_simple::prelude::*;
+use jsonwebtoken::{Header, encode};
 use serde_json::Value;
+use std::{
+    collections::BTreeMap,
+    time::{SystemTime, UNIX_EPOCH},
+};
 
 use crate::{error::WebPushError, vapid::VapidKey};
 
@@ -17,7 +19,33 @@ pub struct VapidSignature {
 }
 
 /// JWT claims object. Custom claims are implemented as a map.
-pub type Claims = JWTClaims<BTreeMap<String /*Use String as lifetimes bug out when serializing a tuple*/, Value>>;
+#[derive(Debug, Clone, Deserialize, Serialize, Default)]
+pub struct Claims {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub iat: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub exp: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub nbf: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sub: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub aud: Option<String>,
+    #[serde(flatten)]
+    pub custom: BTreeMap<String, Value>,
+}
+
+impl Claims {
+    pub fn new() -> Self {
+        let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs();
+        Self {
+            exp: Some(now + 43200),
+            nbf: Some(now),
+            iat: Some(now),
+            ..Default::default()
+        }
+    }
+}
 
 pub struct VapidSigner {}
 
@@ -26,29 +54,15 @@ impl VapidSigner {
     /// endpoint host and sets the expiry in twelve hours. Values can be
     /// overwritten by adding the `aud` and `exp` claims.
     pub fn sign(key: VapidKey, endpoint: &Uri, mut claims: Claims) -> Result<VapidSignature, WebPushError> {
-        if !claims.custom.contains_key("aud") {
+        if claims.aud.is_none() {
             //Add audience if not provided.
             let audience = format!("{}://{}", endpoint.scheme_str().unwrap(), endpoint.host().unwrap());
-            claims = claims.with_audience(audience);
-        } else {
-            //Use provided claims if given. This is here to avoid breaking changes.
-            let aud = claims.custom.get("aud").unwrap().clone();
-            //NOTE: This as_str is needed, else \" gets added around the string
-            claims = claims.with_audience(aud.as_str().ok_or(WebPushError::InvalidClaims)?);
-            claims.custom.remove("aud");
-        }
-
-        //Override the exp claim if provided in custom. Must then remove from custom to avoid printing
-        //Twice, as this is just for backwards compatibility.
-        if claims.custom.contains_key("exp") {
-            let exp = claims.custom.get("exp").unwrap().clone();
-            claims.expires_at = Some(Duration::from_secs(exp.as_u64().ok_or(WebPushError::InvalidClaims)?));
-            claims.custom.remove("exp");
+            claims.aud = Some(audience);
         }
 
         // Add sub if not provided as some browsers (like firefox) require it even though the API doesn't say its needed >:[
-        if !claims.custom.contains_key("sub") {
-            claims = claims.with_subject("mailto:example@example.com".to_string());
+        if claims.sub.is_none() {
+            claims.sub = Some("mailto:example@example.com".to_string());
         }
 
         log::trace!("Using jwt: {:?}", claims);
@@ -56,7 +70,10 @@ impl VapidSigner {
         let auth_k = key.public_key();
 
         //Generate JWT signature
-        let auth_t = key.0.sign(claims).map_err(|_| WebPushError::InvalidClaims)?;
+        let encoding_key = key.encoding_key()?;
+
+        let header = Header::new(jsonwebtoken::Algorithm::ES256);
+        let auth_t = encode(&header, &claims, &encoding_key).map_err(|_| WebPushError::InvalidClaims)?;
 
         Ok(VapidSignature { auth_t, auth_k })
     }

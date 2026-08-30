@@ -23,7 +23,7 @@
 //!
 //! // Read signing material for payload.
 //! let pem = std::fs::read_to_string("private.pem").unwrap();
-//! let mut sig_builder = VapidSignatureBuilder::from_pem(&pem, &subscription_info)?.build()?;
+//! let mut sig_builder = VapidSignatureBuilder::from_pem(&pem, &subscription_info)?.build(Claims::new())?;
 //!
 //! // Now add payload and encrypt.
 //! let content = "Encrypted payload to be sent in the notification".as_bytes();

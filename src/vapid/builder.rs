@@ -1,7 +1,4 @@
 use http::uri::Uri;
-use jwt_simple::prelude::*;
-use serde_json::Value;
-use std::collections::BTreeMap;
 
 use crate::{
     error::WebPushError,
@@ -62,15 +59,10 @@ use crate::{
 /// let pem = std::fs::read_to_string("private.pem").unwrap();
 ///
 /// let signature = VapidSignatureBuilder::from_pem(&pem, &subscription_info).unwrap()
-/// //These fields are optional, and likely unneeded for most uses.
-///     .with_claim("sub", "mailto:test@example.com")
-///     .with_claim("foo", "bar")
-///     .with_claim("omg", 123)
-///     .build().unwrap();
+///     .build(Claims::new()).unwrap();
 /// # }
 /// ```
 pub struct VapidSignatureBuilder<'a> {
-    claims: Claims,
     key: VapidKey,
     subscription_info: &'a SubscriptionInfo,
 }
@@ -150,34 +142,16 @@ impl<'a> VapidSignatureBuilder<'a> {
         })
     }
 
-    /// Add a claim to the signature. Claims `aud` and `exp` are automatically
-    /// added to the signature. Add them manually to override the default
-    /// values.
-    ///
-    /// The function accepts any value that can be converted into a type JSON
-    /// supports.
-    pub fn with_claim<V>(mut self, key: &'a str, val: V) -> Self
-    where
-        V: Into<Value>,
-    {
-        self.claims.custom.insert(key.to_string(), val.into());
-        self
-    }
-
     /// Builds a signature to be used in [WebPushMessageBuilder](struct.WebPushMessageBuilder.html).
-    pub fn build(self) -> Result<VapidSignature, WebPushError> {
+    pub fn build(self, claims: Claims) -> Result<VapidSignature, WebPushError> {
         let endpoint: Uri = self.subscription_info.endpoint.parse()?;
-        let signature = VapidSigner::sign(self.key, &endpoint, self.claims)?;
+        let signature = VapidSigner::sign(self.key, &endpoint, claims)?;
 
         Ok(signature)
     }
 
     pub fn from_ec(key: VapidKey, subscription_info: &'a SubscriptionInfo) -> VapidSignatureBuilder<'a> {
-        VapidSignatureBuilder {
-            claims: jwt_simple::prelude::Claims::with_custom_claims(BTreeMap::new(), Duration::from_hours(12)),
-            key,
-            subscription_info,
-        }
+        VapidSignatureBuilder { key, subscription_info }
     }
 }
 
@@ -186,7 +160,7 @@ impl<'a> VapidSignatureBuilder<'a> {
 /// # Example
 ///
 /// ```no_run
-/// use web_push::{VapidSignatureBuilder, SubscriptionInfo};
+/// use web_push::{VapidSignatureBuilder, SubscriptionInfo, Claims};
 ///
 /// let builder = VapidSignatureBuilder::from_pem_no_sub("Some PEM").unwrap();
 ///
@@ -200,7 +174,7 @@ impl<'a> VapidSignatureBuilder<'a> {
 ///     );
 ///
 ///     let builder = builder.clone();
-///     let sig = builder.add_sub_info(&subscription_info).build();
+///     let sig = builder.add_sub_info(&subscription_info).build(Claims::new());
 ///     //Sign message ect.
 /// }
 ///
@@ -215,7 +189,6 @@ impl PartialVapidSignatureBuilder {
     pub fn add_sub_info(self, subscription_info: &SubscriptionInfo) -> VapidSignatureBuilder<'_> {
         VapidSignatureBuilder {
             key: self.key,
-            claims: jwt_simple::prelude::Claims::with_custom_claims(BTreeMap::new(), Duration::from_hours(12)),
             subscription_info,
         }
     }
@@ -231,13 +204,10 @@ impl PartialVapidSignatureBuilder {
 #[cfg(test)]
 mod tests {
     use ct_codecs::{Base64UrlSafeNoPadding, Encoder};
-    use jwt_simple::{
-        algorithms::{ECDSAP256PublicKeyLike, ES256KeyPair},
-        common::VerificationOptions,
-        reexports::coarsetime::UnixTimeStamp,
-    };
+    use jsonwebtoken::{Validation, decode};
 
     use crate::{
+        VapidKey,
         message::SubscriptionInfo,
         vapid::{VapidSignatureBuilder, signer::Claims},
     };
@@ -262,7 +232,7 @@ mod tests {
     fn test_builder_from_pem() {
         let subscription_info = example_subscription_info();
         let builder = VapidSignatureBuilder::from_pem(PRIVATE_PEM, &subscription_info).unwrap();
-        let signature = builder.build().unwrap();
+        let signature = builder.build(Claims::new()).unwrap();
 
         assert_eq!(
             "BMo1HqKF6skMZYykrte9duqYwBD08mDQKTunRkJdD3sTJ9E-yyN6sJlPWTpKNhp-y2KeS6oANHF-q3w37bClb7U",
@@ -276,7 +246,7 @@ mod tests {
     fn test_builder_from_der() {
         let subscription_info = example_subscription_info();
         let builder = VapidSignatureBuilder::from_der(PRIVATE_DER, &subscription_info).unwrap();
-        let signature = builder.build().unwrap();
+        let signature = builder.build(Claims::new()).unwrap();
 
         assert_eq!(
             "BMo1HqKF6skMZYykrte9duqYwBD08mDQKTunRkJdD3sTJ9E-yyN6sJlPWTpKNhp-y2KeS6oANHF-q3w37bClb7U",
@@ -290,7 +260,7 @@ mod tests {
     fn test_builder_from_base64() {
         let subscription_info = example_subscription_info();
         let builder = VapidSignatureBuilder::from_base64(PRIVATE_BASE64, &subscription_info).unwrap();
-        let signature = builder.build().unwrap();
+        let signature = builder.build(Claims::new()).unwrap();
 
         assert_eq!(
             "BMjQIp55pdbU8pfCBKyXcZjlmER_mXt5LqNrN1hrXbdBS5EnhIbMu3Au-RV53iIpztzNXkGI56BFB1udQ8Bq_H4",
@@ -304,11 +274,16 @@ mod tests {
     fn test_regresion_auth_t() {
         let subscription_info = example_subscription_info();
         // create example signature
-        let mut builder = VapidSignatureBuilder::from_pem(PRIVATE_PEM, &subscription_info).unwrap();
-        builder.claims.issued_at = Some(UnixTimeStamp::from_secs(1787080601));
-        builder.claims.invalid_before = Some(UnixTimeStamp::from_secs(1787080601));
-        builder.claims.expires_at = Some(UnixTimeStamp::from_secs(1787080601 + 43200));
-        let signature = builder.build().unwrap();
+        let claims = Claims {
+            iat: Some(1787080601),
+            nbf: Some(1787080601),
+            exp: Some(1787080601 + 43200),
+            ..Default::default()
+        };
+        let signature = VapidSignatureBuilder::from_pem(PRIVATE_PEM, &subscription_info)
+            .unwrap()
+            .build(claims)
+            .unwrap();
 
         assert_eq!(
             "BMo1HqKF6skMZYykrte9duqYwBD08mDQKTunRkJdD3sTJ9E-yyN6sJlPWTpKNhp-y2KeS6oANHF-q3w37bClb7U",
@@ -316,18 +291,17 @@ mod tests {
             "Verify that key representation stays constant"
         );
 
-        let keypair =
-            ES256KeyPair::from_bytes(&p256::SecretKey::from_sec1_pem(PRIVATE_PEM).unwrap().to_bytes()).unwrap();
+        let vapid_key = VapidKey::from_pem(PRIVATE_PEM).unwrap();
 
-        let verifier_options: VerificationOptions = VerificationOptions {
-            artificial_time: Some(UnixTimeStamp::from_secs(1787080601)),
-            ..Default::default()
-        };
-        let decoded_claims: Claims = keypair
-            .public_key()
-            .verify_token(&signature.auth_t, Some(verifier_options))
-            .unwrap();
-        let claims = serde_json::to_string(&decoded_claims).unwrap();
+        let decoding_key = vapid_key.decoding_key().unwrap();
+
+        let mut validation = Validation::new(jsonwebtoken::Algorithm::ES256);
+        validation.validate_exp = false;
+        validation.validate_nbf = false;
+        validation.validate_aud = false;
+
+        let token_message = decode::<Claims>(&signature.auth_t, &decoding_key, &validation).unwrap();
+        let claims = serde_json::to_string(&token_message.claims).unwrap();
         assert_eq!(
             &claims,
             r#"{"iat":1787080601,"exp":1787123801,"nbf":1787080601,"sub":"mailto:example@example.com","aud":"https://updates.push.services.mozilla.com"}"#
