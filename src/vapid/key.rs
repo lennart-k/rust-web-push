@@ -25,9 +25,9 @@ impl VapidKey {
     pub fn from_der(input: &[u8]) -> Result<Self, WebPushError> {
         Ok(Self(
             ES256KeyPair::from_bytes(
-                &sec1_decode::parse_der(input)
+                &p256::SecretKey::from_sec1_der(input)
                     .map_err(|_| WebPushError::InvalidCryptoKeys)?
-                    .key,
+                    .to_bytes(),
             )
             .map_err(|_| WebPushError::InvalidCryptoKeys)?,
         ))

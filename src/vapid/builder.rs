@@ -316,7 +316,8 @@ mod tests {
             "Verify that key representation stays constant"
         );
 
-        let keypair = ES256KeyPair::from_bytes(&sec1_decode::parse_pem(PRIVATE_PEM.as_bytes()).unwrap().key).unwrap();
+        let keypair =
+            ES256KeyPair::from_bytes(&p256::SecretKey::from_sec1_pem(PRIVATE_PEM).unwrap().to_bytes()).unwrap();
 
         let verifier_options: VerificationOptions = VerificationOptions {
             artificial_time: Some(UnixTimeStamp::from_secs(1787080601)),
