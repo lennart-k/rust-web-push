@@ -45,24 +45,10 @@ impl VapidKey {
     /// Reads the pem file as either format sec1 or pkcs8, then returns the decoded private key.
     pub fn from_pem(input: &str) -> Result<Self, WebPushError> {
         //Parse many PEM in the assumption of extra unneeded sections.
-        let parsed = pem::parse_many(input).map_err(|_| WebPushError::InvalidCryptoKeys)?;
-
-        let found_pkcs8 = parsed.iter().any(|pem| pem.tag() == "PRIVATE KEY");
-        let found_sec1 = parsed.iter().any(|pem| pem.tag() == "EC PRIVATE KEY");
-
-        //Handle each kind of PEM file differently, as EC keys can be in SEC1 or PKCS8 format.
-        if found_sec1 {
-            let key = sec1_decode::parse_pem(input.as_bytes()).map_err(|_| WebPushError::InvalidCryptoKeys)?;
-            Ok(Self(
-                ES256KeyPair::from_bytes(&key.key).map_err(|_| WebPushError::InvalidCryptoKeys)?,
-            ))
-        } else if found_pkcs8 {
-            Ok(Self(
-                ES256KeyPair::from_pem(input).map_err(|_| WebPushError::InvalidCryptoKeys)?,
-            ))
-        } else {
-            Err(WebPushError::MissingCryptoKeys)
-        }
+        let key = p256::SecretKey::from_pem(input).map_err(|_| WebPushError::InvalidCryptoKeys)?;
+        Ok(Self(
+            ES256KeyPair::from_bytes(&key.to_bytes()).map_err(|_| WebPushError::InvalidCryptoKeys)?,
+        ))
     }
 }
 
