@@ -1,6 +1,6 @@
 use base64ct::{Base64UrlUnpadded, Encoding};
 use jsonwebtoken::EncodingKey;
-use p256::{SecretKey, ecdsa::SigningKey, pkcs8::EncodePrivateKey};
+use p256::{SecretKey, ecdsa::SigningKey, elliptic_curve::Generate, pkcs8::EncodePrivateKey};
 
 use crate::WebPushError;
 
@@ -11,6 +11,10 @@ pub struct VapidKey(pub SecretKey);
 impl VapidKey {
     pub fn new(ec_key: SecretKey) -> VapidKey {
         VapidKey(ec_key)
+    }
+
+    pub fn generate() -> Self {
+        VapidKey(SecretKey::generate())
     }
 
     /// Gets the uncompressed public key bytes derived from this private key.
