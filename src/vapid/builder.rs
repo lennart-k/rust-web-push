@@ -203,14 +203,13 @@ impl PartialVapidSignatureBuilder {
 
 #[cfg(test)]
 mod tests {
-    use ct_codecs::{Base64UrlSafeNoPadding, Encoder};
-    use jsonwebtoken::{Validation, decode};
-
     use crate::{
         VapidKey,
         message::SubscriptionInfo,
         vapid::{VapidSignatureBuilder, signer::Claims},
     };
+    use base64ct::{Base64UrlUnpadded, Encoding};
+    use jsonwebtoken::{Validation, decode};
 
     static PRIVATE_PEM: &str = include_str!("../../resources/vapid_test_key.pem");
     static PRIVATE_DER: &[u8] = include_bytes!("../../resources/vapid_test_key.der");
@@ -236,7 +235,7 @@ mod tests {
 
         assert_eq!(
             "BMo1HqKF6skMZYykrte9duqYwBD08mDQKTunRkJdD3sTJ9E-yyN6sJlPWTpKNhp-y2KeS6oANHF-q3w37bClb7U",
-            Base64UrlSafeNoPadding::encode_to_string(&signature.auth_k).unwrap()
+            Base64UrlUnpadded::encode_string(&signature.auth_k)
         );
 
         assert!(!signature.auth_t.is_empty());
@@ -250,7 +249,7 @@ mod tests {
 
         assert_eq!(
             "BMo1HqKF6skMZYykrte9duqYwBD08mDQKTunRkJdD3sTJ9E-yyN6sJlPWTpKNhp-y2KeS6oANHF-q3w37bClb7U",
-            Base64UrlSafeNoPadding::encode_to_string(&signature.auth_k).unwrap()
+            Base64UrlUnpadded::encode_string(&signature.auth_k)
         );
 
         assert!(!signature.auth_t.is_empty());
@@ -264,7 +263,7 @@ mod tests {
 
         assert_eq!(
             "BMjQIp55pdbU8pfCBKyXcZjlmER_mXt5LqNrN1hrXbdBS5EnhIbMu3Au-RV53iIpztzNXkGI56BFB1udQ8Bq_H4",
-            Base64UrlSafeNoPadding::encode_to_string(&signature.auth_k).unwrap()
+            Base64UrlUnpadded::encode_string(&signature.auth_k)
         );
 
         assert!(!signature.auth_t.is_empty());
@@ -287,7 +286,7 @@ mod tests {
 
         assert_eq!(
             "BMo1HqKF6skMZYykrte9duqYwBD08mDQKTunRkJdD3sTJ9E-yyN6sJlPWTpKNhp-y2KeS6oANHF-q3w37bClb7U",
-            Base64UrlSafeNoPadding::encode_to_string(&signature.auth_k).unwrap(),
+            Base64UrlUnpadded::encode_string(&signature.auth_k),
             "Verify that key representation stays constant"
         );
 

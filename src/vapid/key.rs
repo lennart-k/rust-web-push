@@ -1,4 +1,4 @@
-use ct_codecs::{Base64UrlSafeNoPadding, Decoder};
+use base64ct::{Base64UrlUnpadded, Encoding};
 use jsonwebtoken::EncodingKey;
 use p256::{SecretKey, ecdsa::SigningKey, pkcs8::EncodePrivateKey};
 
@@ -47,7 +47,7 @@ impl VapidKey {
     pub fn from_base64(encoded: &str) -> Result<Self, WebPushError> {
         Ok(Self(
             SecretKey::from_slice(
-                &Base64UrlSafeNoPadding::decode_to_vec(encoded, None).map_err(|_| WebPushError::InvalidCryptoKeys)?,
+                &Base64UrlUnpadded::decode_vec(encoded).map_err(|_| WebPushError::InvalidCryptoKeys)?,
             )
             .map_err(|_| WebPushError::InvalidCryptoKeys)?,
         ))
