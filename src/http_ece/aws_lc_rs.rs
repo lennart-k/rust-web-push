@@ -3,14 +3,14 @@
 use std::any::Any;
 
 use aws_lc_rs::{
-    aead::{Aad, LessSafeKey, Nonce, UnboundKey, AES_128_GCM},
+    aead::{AES_128_GCM, Aad, LessSafeKey, Nonce, UnboundKey},
     agreement::{self, UnparsedPublicKey},
-    hkdf::{Salt, HKDF_SHA256},
+    hkdf::{HKDF_SHA256, Salt},
     rand,
 };
 use ece::{
-    crypto::{Cryptographer, EcKeyComponents, LocalKeyPair, RemotePublicKey},
     Error,
+    crypto::{Cryptographer, EcKeyComponents, LocalKeyPair, RemotePublicKey},
 };
 
 /// A remote public key stored in its raw uncompressed point representation.
